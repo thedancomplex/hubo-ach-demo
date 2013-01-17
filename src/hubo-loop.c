@@ -127,6 +127,10 @@ ach_channel_t chan_hubo_param;    // hubo-ach-param
 int debug = 0;
 int hubo_debug = 0;
 
+/* Deg 2 rad */
+double d2r(double rad) { return M_PI*rad/180.0; }
+
+
 //void huboLoop(struct hubo_param *H_param) {
 void huboLoop() {
 	// get initial values for hubo
@@ -157,8 +161,9 @@ void huboLoop() {
 
 	// time info
 	struct timespec t;
+	int interval = 1000000000; // 1hz (1.0 sec)
 	//int interval = 500000000; // 2hz (0.5 sec)
-	int interval = 10000000; // 100 hz (0.01 sec)
+	//int interval = 10000000; // 100 hz (0.01 sec)
 	//int interval = 5000000; // 200 hz (0.005 sec)
 	//int interval = 2000000; // 500 hz (0.002 sec)
 
@@ -169,13 +174,59 @@ void huboLoop() {
 	// get current time
 	//clock_gettime( CLOCK_MONOTONIC,&t);
 	clock_gettime( 0,&t);
+	double theVal = 0.0;
+	double theTarget = -0.3;
+
+	double jntRef[HUBO_JOINT_COUNT];
+	int mode[HUBO_JOINT_COUNT];
+	memset( &jntRef, 0, sizeof(jntRef));
+	memset( &mode, 0, sizeof(mode));
+
+	/* set initial position */
+
+	jntRef[RSP] = d2r(-25);
+	jntRef[RSR] = d2r(-8);
+	jntRef[RSY] = d2r(-1);
+	jntRef[REB] = d2r(-40);
+	jntRef[RWY] = d2r(22);
+	jntRef[RWP] = d2r(58);
+
+	jntRef[LSP] = d2r(-25);
+	jntRef[LSR] = d2r(8);
+	jntRef[LSY] = d2r(1);
+	jntRef[LEB] = d2r(-40);
+	jntRef[LWY] = d2r(-22);
+	jntRef[LWP] = d2r(58);
+
+/*
+	H_ref.ref[RSP] = jntRef[RSP];
+	H_ref.ref[RSR] = jntRef[RSR];
+	H_ref.ref[RSY] = jntRef[RSY];
+	H_ref.ref[REB] = jntRef[REB];
+	H_ref.ref[RWY] = jntRef[RWY];
+	H_ref.ref[RWP] = jntRef[RWP];
+
+	H_ref.ref[LSP] = jntRef[LSP];
+	H_ref.ref[LSR] = jntRef[LSR];
+	H_ref.ref[LSY] = jntRef[LSY];
+	H_ref.ref[LEB] = jntRef[LEB];
+	H_ref.ref[LWY] = jntRef[LWY];
+	H_ref.ref[LWP] = jntRef[LWP];
+*/
+	memcpy(&H_ref.ref, &jntRef, sizeof(jntRef));
+	memcpy(&H_ref.mode, &mode, sizeof(mode));
+
+	ach_put(&chan_hubo_ref, &H_ref, sizeof(H_ref));
+	sleep(2.0);
+
+	int state = 0;
 
 	while(1) {
 		// wait until next shot
 		clock_nanosleep(0,TIMER_ABSTIME,&t, NULL);
 
 		/* Get latest ACH message */
-		r = ach_get( &chan_hubo_ref, &H_ref, sizeof(H_ref), &fs, NULL, ACH_O_COPY );
+		r = ach_get( &chan_hubo_ref, &H_ref, sizeof(H_ref), &fs, NULL, ACH_O_LAST );
 		if(ACH_OK != r) {
 			if(hubo_debug) {
 				printf("Ref r = %s\n",ach_result_to_string(r));}
@@ -191,11 +242,14 @@ void huboLoop() {
 // ------------------------------------------------------------------------------
 // ---------------[ DO NOT EDIT AVBOE THIS LINE]---------------------------------
 // ------------------------------------------------------------------------------
+/*
+			if( theVal < theTarget/2.0 ) theVal = 0.0;
+			else theVal = theTarget;
+			H_ref.ref[LEB] = theVal;
 
-
-			H_ref.ref[LEB] = -1.0;
+	H_ref.mode[LEB] = HUBO_REF_MODE_REF_FILTER;
 			double encLEB = H_state.joint[LEB].pos;
-
+*/
 // ------------------------------------------------------------------------------
 // ---------------[ DO NOT EDIT BELOW THIS LINE]---------------------------------
 // ------------------------------------------------------------------------------
