@@ -61,6 +61,17 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <inttypes.h>
 #include "ach.h"
 
+// For UDP
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#define BUFLEN 512
+#define NPACK 10
+#define PORT 11000
 
 /* At time of writing, these constants are not defined in the headers */
 #ifndef PF_CAN
@@ -106,6 +117,8 @@ void getMotorPosFrame(int motor, struct can_frame *frame);
 void huboLoop();
 int ftime(struct timeb *tp);
 
+int udp(void);
+void diep(char *s);
 
 
 
@@ -131,7 +144,13 @@ int hubo_debug = 0;
 double d2r(double rad) { return M_PI*rad/180.0; }
 
 
-//void huboLoop(struct hubo_param *H_param) {
+void diep(char *s){
+   perror(s);
+   exit(1);
+}//void huboLoop(struct hubo_param *H_param) {
+
+
+
 void huboLoop() {
 	// get initial values for hubo
 	struct hubo_ref H_ref;
@@ -181,6 +200,77 @@ void huboLoop() {
 	int mode[HUBO_JOINT_COUNT];
 	memset( &jntRef, 0, sizeof(jntRef));
 	memset( &mode, 0, sizeof(mode));
+        
+        // Added 1/17/13 Alyssa Batula
+        double pipeBaseRightJointRef[6];        // Base position for right arm [RSP, RSR, RSY, REB, RWY, RWP]
+        double pipeBaseLeftJointRef[6];         // Base position for left arm [LSP, LSR, LSY, LEB, LWY, LWP]
+        double pipe0JointRef[6];                // Pipe left out relative joint movement (degrees)
+        double pipe1JointRef[6];                // Pipe left in relative joint movement (degrees)
+        double pipe2JointRef[6];                // Pipe right in relative joint movement (degrees)
+        double pipe3JointRef[6];                // Pipe right out relative joint movement (degrees)
+        
+        //Set the default values for pipe positions
+        pipeBaseRightJointRef[0] = d2r(-25.0);
+        pipeBaseRightJointRef[1] = d2r(-8.0);
+        pipeBaseRightJointRef[2] = d2r(-1.0);
+        pipeBaseRightJointRef[3] = d2r(-40.0);
+        pipeBaseRightJointRef[4] = d2r(22.0);
+        pipeBaseRightJointRef[5] = d2r(-58.0);
+        
+        pipeBaseLeftJointRef[0] = d2r(-25.0);
+        pipeBaseLeftJointRef[1] = d2r(8.0);
+        pipeBaseLeftJointRef[2] = d2r(1.0);
+        pipeBaseLeftJointRef[3] = d2r(-40.0);
+        pipeBaseLeftJointRef[4] = d2r(-22.0);
+        pipeBaseLeftJointRef[5] = d2r(58.0);
+        
+        // Left out
+        pipe0JointRef[0] = d2r(6.0);
+        pipe0JointRef[1] = d2r(4.0);
+        pipe0JointRef[2] = d2r(4.0);
+        pipe0JointRef[3] = d2r(5.0);
+        pipe0JointRef[4] = d2r(0.0);
+        pipe0JointRef[5] = d2r(0.0);
+        
+        // Left in
+        pipe1JointRef[0] = d2r(3.5);
+        pipe1JointRef[1] = d2r(-6.0);
+        pipe1JointRef[2] = d2r(-5.0);
+        pipe1JointRef[3] = d2r(3.5);
+        pipe1JointRef[4] = d2r(0.0);
+        pipe1JointRef[5] = d2r(0.0);
+        
+        // Right in
+        pipe2JointRef[0] = d2r(3.5);
+        pipe2JointRef[1] = d2r(6.0);
+        pipe2JointRef[2] = d2r(5.0);
+        pipe2JointRef[3] = d2r(3.5);
+        pipe2JointRef[4] = d2r(0.0);
+        pipe2JointRef[5] = d2r(0.0);
+        
+        // Right Out
+        pipe3JointRef[0] = d2r(6.0);
+        pipe3JointRef[1] = d2r(-4.0);
+        pipe3JointRef[2] = d2r(-4.0);
+        pipe3JointRef[3] = d2r(5.0);
+        pipe3JointRef[4] = d2r(0.0);
+        pipe3JointRef[5] = d2r(0.0);
+        
+        
+        // UDP motion control variables
+        /*
+        const int ECHOMAX = 255;
+        unsigned short echoServPort = 2000;
+        UDPSocket sock(echoServPort); 
+        char echoBuffer[255];           // Buffer for echo string
+        int recvMsgSize;                  // Size of received message
+        string sourceAddress;             // Address of datagram source
+        unsigned short sourcePort;        // Port of datagram source
+        int dataToReadUDP=0;               // whether or not there is data from UDP
+        */
+                
+
+
 
 	/* set initial position */
 
@@ -242,12 +332,27 @@ void huboLoop() {
 // ------------------------------------------------------------------------------
 // ---------------[ DO NOT EDIT AVBOE THIS LINE]---------------------------------
 // ------------------------------------------------------------------------------
+                // Check for UDP data, read in if it's there
+               /*
+               dataToReadUDP = sock.seeIfDataReady(2010);
+                if(dataToReadUDP>0)
+                {
+                    dataToReadUDP = 0;
+                    recvMsgSize = sock.recvFrom(echoBuffer, ECHOMAX, sourceAddress, sourcePort);
+                }
+                
+                if((int)echoBuffer[0] == 1)
+                {
+                    H_ref.ref[LEB] = pipe0JointRef[3];
+                }
+                */
+
 /*
 			if( theVal < theTarget/2.0 ) theVal = 0.0;
 			else theVal = theTarget;
 			H_ref.ref[LEB] = theVal;
 
-	H_ref.mode[LEB] = HUBO_REF_MODE_REF_FILTER;
+	H_ref.mode[LEB] = HUBO_REF_MODE_REF_FILTER; 
 			double encLEB = H_state.joint[LEB].pos;
 */
 // ------------------------------------------------------------------------------
@@ -283,6 +388,38 @@ static inline void tsnorm(struct timespec *ts){
 		ts->tv_sec++;
 	}
 }
+
+
+
+int udp(void) {
+    struct sockaddr_in si_me, si_other;
+    int s, i, slen=sizeof(si_other);
+    char buf[BUFLEN];
+
+    if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP))==-1)
+      diep("socket");
+
+    memset((char *) &si_me, 0, sizeof(si_me));
+    si_me.sin_family = AF_INET;
+    si_me.sin_port = htons(PORT);
+    si_me.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(s, &si_me, sizeof(si_me))==-1)
+        diep("bind");
+while(1){
+    for (i=0; i<NPACK; i++) {
+      if (recvfrom(s, buf, BUFLEN, 0, &si_other, &slen)==-1)
+        diep("recvfrom()");
+//      printf("Received packet from %s:%d\nData: %s\n\n", 
+//             inet_ntoa(si_other.sin_addr), ntohs(si_other.sin_port), buf);
+		printf("\n%d %d %d\n",buf[0], buf[1], buf[2]);
+	}	
+}
+
+    close(s);
+    return 0;
+
+}
+
 
 int main(int argc, char **argv) {
 
@@ -321,7 +458,7 @@ int main(int argc, char **argv) {
 	stack_prefault();
 
 
-	/* open ach channel */
+	/* open ach channel */ 
 	//int r = ach_open(&chan_hubo_ref, HUBO_CHAN_REF_NAME , NULL);
 	int r = ach_open(&chan_hubo_ref, ach_chan , NULL);
 	assert( ACH_OK == r );
@@ -346,6 +483,8 @@ int main(int argc, char **argv) {
         //setJointParams(&H_param, &H_state);
 
         //huboLoop(&H_param);
+//	while(1) { udp();}
+	udp();
         huboLoop();
 
 	pause();
