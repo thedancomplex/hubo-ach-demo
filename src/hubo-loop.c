@@ -272,21 +272,25 @@ void huboLoop() {
         pipe3JointRef[4] = d2r(0.0);
         pipe3JointRef[5] = d2r(0.0);
         
+	H_ref.ref[RSP] = pipeBaseRightJointRef[0];
+        H_ref.ref[RSR] = pipeBaseRightJointRef[1];
+        H_ref.ref[RSY] = pipeBaseRightJointRef[2];
+        H_ref.ref[REB] = pipeBaseRightJointRef[3];
+        H_ref.ref[RWY] = pipeBaseRightJointRef[4];
+        H_ref.ref[RWP] = pipeBaseRightJointRef[5];
         
-        // UDP motion control variables
-        /*
-        const int ECHOMAX = 255;
-        unsigned short echoServPort = 2000;
-        UDPSocket sock(echoServPort); 
-        char echoBuffer[255];           // Buffer for echo string
-        int recvMsgSize;                  // Size of received message
-        string sourceAddress;             // Address of datagram source
-        unsigned short sourcePort;        // Port of datagram source
-        int dataToReadUDP=0;               // whether or not there is data from UDP
-        */
-                
+        H_ref.ref[LSP] = pipeBaseLeftJointRef[0];
+        H_ref.ref[LSR] = pipeBaseLeftJointRef[1];
+        H_ref.ref[LSY] = pipeBaseLeftJointRef[2];
+        H_ref.ref[LEB] = pipeBaseLeftJointRef[3];
+        H_ref.ref[LWY] = pipeBaseLeftJointRef[4];
+        H_ref.ref[LWP] = pipeBaseLeftJointRef[5];
 
 
+	memcpy(&H_ref.mode, &mode, sizeof(mode));
+	ach_put( &chan_hubo_ref, &H_ref, sizeof(H_ref));
+
+	sleep(1.0);
 
 	int state = 0;
 
@@ -378,6 +382,7 @@ void huboLoop() {
 		ach_put( &chan_hubo_ref, &H_ref, sizeof(H_ref));
 		usleep(50000);		// sleep for x microseconds 1,000,000 per sec wait 0.05sec
 
+                
 		H_ref.ref[RSP] = pipeBaseRightJointRef[0];
 		H_ref.ref[RSR] = pipeBaseRightJointRef[1];
 		H_ref.ref[RSY] = pipeBaseRightJointRef[2];
