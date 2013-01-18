@@ -119,8 +119,7 @@ int ftime(struct timeb *tp);
 
 int udp(void);
 void diep(char *s);
-
-
+void combine(double* absoluteJointValues, double* relativeJointValues, double* jointValues);
 
 
 
@@ -176,6 +175,23 @@ void huboLoop() {
 	else{
 		assert( sizeof(H_state) == fs );
 	 }
+
+
+/* Open UPD */
+	struct sockaddr_in si_me, si_other;
+	    int s, i, slen=sizeof(si_other);
+	    char buf[BUFLEN];
+
+	    if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP))==-1)
+	      diep("socket");
+
+	    memset((char *) &si_me, 0, sizeof(si_me));
+	    si_me.sin_family = AF_INET;
+	    si_me.sin_port = htons(PORT);
+	    si_me.sin_addr.s_addr = htonl(INADDR_ANY);
+	    if (bind(s, &si_me, sizeof(si_me))==-1)
+	        diep("bind");
+	printf("\n just made UDP \n");
 
 
 	// time info
@@ -272,48 +288,11 @@ void huboLoop() {
 
 
 
-	/* set initial position */
-
-	jntRef[RSP] = d2r(-25);
-	jntRef[RSR] = d2r(-8);
-	jntRef[RSY] = d2r(-1);
-	jntRef[REB] = d2r(-40);
-	jntRef[RWY] = d2r(22);
-	jntRef[RWP] = d2r(58);
-
-	jntRef[LSP] = d2r(-25);
-	jntRef[LSR] = d2r(8);
-	jntRef[LSY] = d2r(1);
-	jntRef[LEB] = d2r(-40);
-	jntRef[LWY] = d2r(-22);
-	jntRef[LWP] = d2r(58);
-
-/*
-	H_ref.ref[RSP] = jntRef[RSP];
-	H_ref.ref[RSR] = jntRef[RSR];
-	H_ref.ref[RSY] = jntRef[RSY];
-	H_ref.ref[REB] = jntRef[REB];
-	H_ref.ref[RWY] = jntRef[RWY];
-	H_ref.ref[RWP] = jntRef[RWP];
-
-	H_ref.ref[LSP] = jntRef[LSP];
-	H_ref.ref[LSR] = jntRef[LSR];
-	H_ref.ref[LSY] = jntRef[LSY];
-	H_ref.ref[LEB] = jntRef[LEB];
-	H_ref.ref[LWY] = jntRef[LWY];
-	H_ref.ref[LWP] = jntRef[LWP];
-*/
-	memcpy(&H_ref.ref, &jntRef, sizeof(jntRef));
-	memcpy(&H_ref.mode, &mode, sizeof(mode));
-
-	ach_put(&chan_hubo_ref, &H_ref, sizeof(H_ref));
-	sleep(2.0);
-
 	int state = 0;
 
 	while(1) {
 		// wait until next shot
-		clock_nanosleep(0,TIMER_ABSTIME,&t, NULL);
+//		clock_nanosleep(0,TIMER_ABSTIME,&t, NULL);
 
 		/* Get latest ACH message */
 		r = ach_get( &chan_hubo_ref, &H_ref, sizeof(H_ref), &fs, NULL, ACH_O_LAST );
@@ -329,38 +308,102 @@ void huboLoop() {
 			}
 		else{   assert( sizeof(H_state) == fs ); }
 
+	double tmpRefR[6];
+	double tmpRefL[6];
+	memset(&tmpRefR, 0, sizeof(tmpRefR));
+	memset(&tmpRefL, 0, sizeof(tmpRefL));
+
+
+
 // ------------------------------------------------------------------------------
 // ---------------[ DO NOT EDIT AVBOE THIS LINE]---------------------------------
 // ------------------------------------------------------------------------------
-                // Check for UDP data, read in if it's there
-               /*
-               dataToReadUDP = sock.seeIfDataReady(2010);
-                if(dataToReadUDP>0)
-                {
-                    dataToReadUDP = 0;
-                    recvMsgSize = sock.recvFrom(echoBuffer, ECHOMAX, sourceAddress, sourcePort);
-                }
-                
-                if((int)echoBuffer[0] == 1)
-                {
-                    H_ref.ref[LEB] = pipe0JointRef[3];
-                }
-                */
+	/* Wait for UPD */
+	printf("\n Wait for UDP \n");
+	if (recvfrom(s, buf, BUFLEN, 0, &si_other, &slen)==-1)
+        	diep("recvfrom()");
+        printf("\n%u %u %u\n",buf[0], buf[1], buf[2]);
+//------------------------------------------------------------------------------
+//+++++++++++[Will run after UDP is received]+++++++++++++++++++++++++++++++++++
+//------------------------------------------------------------------------------
+	/* state machine */
+	if( 1 == buf[0] ) {	// Hit a pipe
+		if( 0 == buf[1] ) { // down pipe 0
+			
+			combine( &pipeBaseLeftJointRef, &pipe0JointRef, &tmpRefL);
 
-/*
-			if( theVal < theTarget/2.0 ) theVal = 0.0;
-			else theVal = theTarget;
-			H_ref.ref[LEB] = theVal;
+			H_ref.ref[LSP] = tmpRefL[0];
+			H_ref.ref[LSR] = tmpRefL[1];
+			H_ref.ref[LSY] = tmpRefL[2];
+			H_ref.ref[LEB] = tmpRefL[3];
+			H_ref.ref[LWY] = tmpRefL[4];
+			H_ref.ref[LWP] = tmpRefL[5];
+		}
+		else if( 1 == buf[1] ) { // down pipe 1
+			
+			combine( &pipeBaseLeftJointRef, &pipe1JointRef, &tmpRefL);
 
-	H_ref.mode[LEB] = HUBO_REF_MODE_REF_FILTER; 
-			double encLEB = H_state.joint[LEB].pos;
-*/
+			H_ref.ref[LSP] = tmpRefL[0];
+			H_ref.ref[LSR] = tmpRefL[1];
+			H_ref.ref[LSY] = tmpRefL[2];
+			H_ref.ref[LEB] = tmpRefL[3];
+			H_ref.ref[LWY] = tmpRefL[4];
+			H_ref.ref[LWP] = tmpRefL[5];
+		} 
+
+		else if( 2 == buf[1] ) { // down pipe 2
+			
+			combine( &pipeBaseRightJointRef, &pipe2JointRef, &tmpRefR);
+
+			H_ref.ref[RSP] = tmpRefR[0];
+			H_ref.ref[RSR] = tmpRefR[1];
+			H_ref.ref[RSY] = tmpRefR[2];
+			H_ref.ref[REB] = tmpRefR[3];
+			H_ref.ref[RWY] = tmpRefR[4];
+			H_ref.ref[RWP] = tmpRefR[5];
+		} 
+		else if( 3 == buf[1] ) { // down pipe 2
+			
+			combine( &pipeBaseRightJointRef, &pipe3JointRef, &tmpRefR);
+
+			H_ref.ref[RSP] = tmpRefR[0];
+			H_ref.ref[RSR] = tmpRefR[1];
+			H_ref.ref[RSY] = tmpRefR[2];
+			H_ref.ref[REB] = tmpRefR[3];
+			H_ref.ref[RWY] = tmpRefR[4];
+			H_ref.ref[RWP] = tmpRefR[5];
+		} 
+
+        	
+		ach_put( &chan_hubo_ref, &H_ref, sizeof(H_ref));
+		usleep(50000);		// sleep for x microseconds 1,000,000 per sec wait 0.05sec
+
+		H_ref.ref[RSP] = pipeBaseRightJointRef[0];
+		H_ref.ref[RSR] = pipeBaseRightJointRef[1];
+		H_ref.ref[RSY] = pipeBaseRightJointRef[2];
+		H_ref.ref[REB] = pipeBaseRightJointRef[3];
+		H_ref.ref[RWY] = pipeBaseRightJointRef[4];
+		H_ref.ref[RWP] = pipeBaseRightJointRef[5];
+		
+		H_ref.ref[LSP] = pipeBaseLeftJointRef[0];
+                H_ref.ref[LSR] = pipeBaseLeftJointRef[1];
+                H_ref.ref[LSY] = pipeBaseLeftJointRef[2];
+                H_ref.ref[LEB] = pipeBaseLeftJointRef[3];
+                H_ref.ref[LWY] = pipeBaseLeftJointRef[4];
+                H_ref.ref[LWP] = pipeBaseLeftJointRef[5];
+
+	}
+
+	
+
+//[RSP, RSR, RSY, REB, RWY, RWP
+
 // ------------------------------------------------------------------------------
 // ---------------[ DO NOT EDIT BELOW THIS LINE]---------------------------------
 // ------------------------------------------------------------------------------
 		ach_put( &chan_hubo_ref, &H_ref, sizeof(H_ref));
-		t.tv_nsec+=interval;
-		tsnorm(&t);
+//		t.tv_nsec+=interval;
+//		tsnorm(&t);
 	}
 
 
@@ -390,6 +433,14 @@ static inline void tsnorm(struct timespec *ts){
 }
 
 
+void combine(double* absoluteJointValues, double* relativeJointValues, double* jointValues)
+{
+    int i;
+
+    for (i = 0; i < 6; i++)
+        jointValues[i] = absoluteJointValues[i] + absoluteJointValues[i];
+}
+
 
 int udp(void) {
     struct sockaddr_in si_me, si_other;
@@ -406,19 +457,20 @@ int udp(void) {
     if (bind(s, &si_me, sizeof(si_me))==-1)
         diep("bind");
 while(1){
-    for (i=0; i<NPACK; i++) {
+//    for (i=0; i<NPACK; i++) {
       if (recvfrom(s, buf, BUFLEN, 0, &si_other, &slen)==-1)
         diep("recvfrom()");
 //      printf("Received packet from %s:%d\nData: %s\n\n", 
 //             inet_ntoa(si_other.sin_addr), ntohs(si_other.sin_port), buf);
 		printf("\n%d %d %d\n",buf[0], buf[1], buf[2]);
-	}	
+//	}	
 }
 
     close(s);
     return 0;
 
 }
+
 
 
 int main(int argc, char **argv) {
@@ -484,7 +536,7 @@ int main(int argc, char **argv) {
 
         //huboLoop(&H_param);
 //	while(1) { udp();}
-	udp();
+//	udp();
         huboLoop();
 
 	pause();
